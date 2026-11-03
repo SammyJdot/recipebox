@@ -146,8 +146,14 @@ git push origin v0.1.0
 ```
 
 Tag pushes run checks, build/test Docker, authenticate with registry repository
-secrets, publish a version-tagged image, then create a GitHub release from the
-changelog. No `latest` tag is needed, no personal registry account is hardcoded,
+secrets, publish a version-tagged image, verify the tag digest against the build
+output and pull that digest on the CI runner, then create a GitHub release from
+the changelog. For GHCR the publish job also reads package metadata with the
+existing registry token and requires private visibility; it never changes a
+registry setting. GitHub Packages metadata requires `read:packages` access
+(the classic token used for publication must have the corresponding package
+read/write access). No published image is started by these verification steps.
+No `latest` tag is needed, no personal registry account is hardcoded,
 and nothing publishes on an ordinary main push. A failed publish is a failed
 check; no successful release is fabricated. If credentials are missing, do not
 tag; report the exact missing variables/secrets. Release images support the

@@ -193,9 +193,11 @@ check the tag workflow, registry, and GitHub release.
 
 Pushes to `main` run tests, frontend build, browser checks, Docker build and
 Compose smoke checks. Version tags (`vMAJOR.MINOR.PATCH`) run those checks again,
-then publish only the tagged image and create a GitHub release with changelog
-notes. Image names derive from the repository, without an account hardcoded in
-source or workflow. Configure these repository values before tagging:
+then publish only the tagged image, verify its registry digest and authenticated
+pull, and create a GitHub release with changelog notes. For GHCR, publication
+also reads package metadata and requires private visibility before the release
+job runs; it never changes visibility. Image names derive from the repository,
+without an account hardcoded in source or workflow. Configure these repository values before tagging:
 
 | Setting | Kind | Purpose |
 | --- | --- | --- |
@@ -205,12 +207,13 @@ source or workflow. Configure these repository values before tagging:
 | `REGISTRY_PASSWORD` | Repository secret | Existing registry token/password with image push permission. |
 | `GITHUB_TOKEN` | Automatic Actions token | Release job needs `contents: write`; repository Actions policy must allow it. |
 
-The target registry repository/package must be **private before the first push**.
-Create or configure that destination privately and verify access permissions;
-registry visibility cannot be guaranteed by a portable Docker push. No image is
-made public by this workflow. Do not tag a release until private destination and
-credentials are ready. The workflow fails explicitly when configuration/secrets
-are missing. SSH Git access alone does not supply registry credentials or an API
+An existing target registry repository/package must be **private before publishing**.
+A new GHCR package is created on its first push with private visibility; the
+workflow verifies that visibility afterward through the GitHub Packages API.
+Other registries require a privately configured destination and operator
+verification. The workflow never changes package visibility. Do not tag a release
+until the private destination behavior and credentials are confirmed. The
+workflow fails explicitly when configuration/secrets are missing. SSH Git access alone does not supply registry credentials or an API
 credential for manually creating releases.
 
 ## License

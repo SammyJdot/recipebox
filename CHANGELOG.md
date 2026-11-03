@@ -2,16 +2,16 @@
 
 ## [Unreleased]
 
-- Remove promotional copy and decorative landing content throughout the UI; use neutral light styling, system fonts, and plain empty states.
+## [0.1.0] — 2026-11-03
 
-- Initial RecipeBox implementation: local and OIDC login with shared server sessions.
-- Shared boxes, recipe author permissions, structured ingredients and ordered steps.
-- Search, fractional serving scaling, print view, photos, thumbnails and covers.
-- Append-only audit records with atomic cascade events, JSON request logs, public health endpoint and admin role foundation.
-- Out-of-band stdin password reset with session revocation and audit coverage.
-- Docker packaging, persistent SQLite/uploads volume, CI checks and version-tag release automation.
-- AGPL-3.0-only license and self-hosting/development documentation.
-
-No version tag or container publication has been issued yet. Before the first
-release, move these entries into a dated version section, match package and
-lockfile versions, verify the private registry configuration, and pass all checks.
+- Add local and OIDC login with shared server-side sessions and recipe author permissions.
+- Create and edit recipes with structured ingredients, ordered steps, sources, and photos.
+- Organize recipes into shared boxes, including adding one recipe to multiple boxes.
+- Search by title or ingredient, filter by box, scale fractional quantities, and print recipes.
+- Generate photo thumbnails and support cover selection and photo deletion.
+- Record append-only audit events and structured request logs, with a public health endpoint and admin role foundation.
+- Provide an out-of-band password reset command with session revocation and auditing.
+- Use a minimal light interface with neutral colors, system fonts, and plain empty states.
+- Package the app with Docker, persistent SQLite and uploads storage, CI checks, and version-tag release automation.
+- Verify published image digests, authenticated pulls, and private GHCR package visibility before creating a GitHub release.
+- Include the AGPL-3.0-only license and self-hosting and development documentation.

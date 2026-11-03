@@ -54,6 +54,7 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
       - uses: docker/build-push-action@v6
+        id: published_image
         with:
           context: .
           push: true
@@ -63,6 +64,30 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.licenses=AGPL-3.0-only
+      - name: Verify published image and GHCR visibility
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          EXPECTED_DIGEST: ${{ steps.published_image.outputs.digest }}
+          GH_TOKEN: ${{ secrets.REGISTRY_PASSWORD }}
+        shell: bash
+        run: |
+          image_ref="$IMAGE_NAME:$GITHUB_REF_NAME"
+          published_digest=$(docker buildx imagetools inspect "$image_ref" --format '{{.Manifest.Digest}}')
+          test "$published_digest" = "$EXPECTED_DIGEST" || { echo 'Published tag digest does not match build output'; exit 1; }
+          docker pull "$IMAGE_NAME@$EXPECTED_DIGEST"
+          echo "Verified image: $image_ref@$EXPECTED_DIGEST"
+          if [ "${REGISTRY,,}" = ghcr.io ]; then
+            image_path="${IMAGE_NAME#*/}"
+            package_owner="${image_path%%/*}"
+            package_name="${image_path#*/}"
+            encoded_package=$(jq -rn --arg value "$package_name" '$value | @uri')
+            owner_type=$(gh api "users/$package_owner" --jq '.type')
+            package_route=users
+            if [ "$owner_type" = Organization ]; then package_route=orgs; fi
+            visibility=$(gh api "$package_route/$package_owner/packages/container/$encoded_package" --jq '.visibility')
+            echo "Verified GHCR package visibility: $visibility"
+            test "$visibility" = private || { echo 'Expected a private GHCR package; no visibility setting was changed'; exit 1; }
+          fi
   release:
     needs: publish
     runs-on: ubuntu-latest
