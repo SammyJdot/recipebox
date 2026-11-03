@@ -75,9 +75,7 @@ export function Dashboard() {
     <>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">YOUR RECIPE COLLECTION</span>
-          <h1>Good things live here.</h1>
-          <p>Find something to cook. Keep something to remember.</p>
+          <h1>Recipes</h1>
         </div>
         <Link className="button primary" to="/recipes/new">
           + New recipe
@@ -111,7 +109,7 @@ export function Dashboard() {
       <div className="collection-layout">
         <aside className="box-sidebar">
           <div className="section-heading">
-            <h2>Your boxes</h2>
+            <h2>Boxes</h2>
             <button
               className="quiet"
               aria-label="Create a box"
@@ -120,7 +118,7 @@ export function Dashboard() {
               +
             </button>
           </div>
-          <p className="hint">Shared with everyone here.</p>
+          <p className="hint">Visible to all users.</p>
           <nav aria-label="Recipe boxes">
             <button
               className={`box-link ${!boxId ? "selected" : ""}`}
@@ -139,9 +137,7 @@ export function Dashboard() {
               </button>
             ))}
           </nav>
-          {!boxes.length ? (
-            <p className="hint">A box keeps related recipes together.</p>
-          ) : null}
+          {!boxes.length ? <p className="hint">No boxes yet</p> : null}
           <button
             className="text-button"
             onClick={() => setEditing({ name: "", description: "" })}
@@ -200,12 +196,12 @@ export function Dashboard() {
                     )}
                     <div className="recipe-card-content">
                       <h3>{r.title}</h3>
-                      <p>{r.description || "Ready when you are."}</p>
+                      {r.description ? <p>{r.description}</p> : null}
                       <div className="recipe-meta">
                         <span>
                           {r.prep_minutes != null || r.cook_minutes != null
                             ? `${(r.prep_minutes || 0) + (r.cook_minutes || 0)} min`
-                            : "Take your time"}
+                            : "Time not set"}
                         </span>
                         <span>{r.servings} servings</span>
                       </div>
@@ -216,23 +212,13 @@ export function Dashboard() {
             </>
           ) : (
             <div className="empty-state">
-              <span className="empty-symbol" aria-hidden="true">
-                ▱
-              </span>
               <h3>
                 {q
                   ? "No recipes found"
                   : selected
-                    ? "Make room for something good."
-                    : "Your collection starts with one recipe."}
+                    ? "No recipes in this box"
+                    : "No recipes yet"}
               </h3>
-              <p>
-                {q
-                  ? "Try another title or ingredient, or choose a different box."
-                  : selected
-                    ? "Open any recipe and add it to this box."
-                    : "Save your first recipe, or create a box to get organized."}
-              </p>
               <div className="actions">
                 <Link className="button primary" to="/recipes/new">
                   Create a recipe

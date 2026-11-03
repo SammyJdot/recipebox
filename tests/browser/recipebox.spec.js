@@ -11,12 +11,8 @@ test("register, create, organize, search, scale, print and manage photos", async
   const title = `Test recipe ${suffix}`;
   const boxName = `Test box ${suffix}`;
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Make yourself at home." }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "New here? Create an account" })
-    .click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await page.getByRole("button", { name: "Create account" }).click();
   await page.getByLabel("Display name").fill("Test Member");
   await page.getByLabel("Username").fill(`test-${suffix}`);
   await page
@@ -26,14 +22,15 @@ test("register, create, organize, search, scale, print and manage photos", async
     .getByRole("button", { name: "Create account", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Good things live here." }),
+    page.getByRole("heading", { name: "Recipes", exact: true }),
   ).toBeVisible();
   if (testInfo.project.name === "desktop")
     await expect(
       page.getByRole("heading", {
-        name: "Your collection starts with one recipe.",
+        name: "No recipes yet",
       }),
     ).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("empty-dashboard.png"), fullPage: true });
   await page
     .getByRole("button", { name: "Create a box", exact: true })
     .first()
@@ -80,13 +77,11 @@ test("register, create, organize, search, scale, print and manage photos", async
     .getByLabel("Upload photo")
     .setInputFiles({ name: "test.png", mimeType: "image/png", buffer: image });
   await expect(page.getByText("Cover photo", { exact: true })).toBeVisible();
-  await page
-    .getByLabel("Upload photo")
-    .setInputFiles({
-      name: "second.png",
-      mimeType: "image/png",
-      buffer: image,
-    });
+  await page.getByLabel("Upload photo").setInputFiles({
+    name: "second.png",
+    mimeType: "image/png",
+    buffer: image,
+  });
   await page.getByRole("button", { name: "Make cover" }).click();
   await expect(
     page
@@ -146,11 +141,9 @@ test("register, create, organize, search, scale, print and manage photos", async
     .getByRole("button", { name: "Delete recipe", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Good things live here." }),
+    page.getByRole("heading", { name: "Recipes", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Log out" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Make yourself at home." }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   expect(errors).toEqual([]);
 });

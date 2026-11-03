@@ -14,7 +14,7 @@ database, hosted service, or mandatory identity provider.
 - `server/api.js`: validated recipe, box, organization, and photo mutations with server-side ownership checks.
 - `server/app.js`: middleware, health, protected media, SPA, and JSON error handling.
 - `server/reset-password.js`: operator-only stdin password reset CLI, never an app route.
-- `web/src`: dashboard, editor, viewer, and quantity scaling. Styling is mobile-first with print rules.
+- `web/src`: dashboard, editor, viewer, and quantity scaling. The light UI uses neutral colors, system sans-serif typography, functional labels, and plain empty states. Styling is mobile-first with print rules. In OIDC mode the signed-out page contains the RecipeBox header and Sign in control; local mode retains its login and registration forms.
 
 Data lives in `/data` in the container; `DATA_DIR` allows a relative development
 directory. SQLite uses foreign keys, WAL, a busy timeout, and schema version 1.

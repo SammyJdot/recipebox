@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Remove promotional copy and decorative landing content throughout the UI; use neutral light styling, system fonts, and plain empty states.
+
 - Initial RecipeBox implementation: local and OIDC login with shared server sessions.
 - Shared boxes, recipe author permissions, structured ingredients and ordered steps.
 - Search, fractional serving scaling, print view, photos, thumbnails and covers.

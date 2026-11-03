@@ -115,17 +115,14 @@ export function RecipeEditor() {
       </Link>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">
-            {id ? "MAKE IT YOUR OWN" : "SAVE SOMETHING GOOD"}
-          </span>
-          <h1>{id ? "Edit recipe" : "A new recipe."}</h1>
-          <p>Start with the essentials. Add photos after saving.</p>
+          <h1>{id ? "Edit recipe" : "New recipe"}</h1>
+          <p>Add photos after saving.</p>
         </div>
       </div>
       <form onSubmit={save}>
         <fieldset disabled={busy} className="editor-fieldset">
           <section className="panel">
-            <h2>The essentials</h2>
+            <h2>Details</h2>
             <label>
               Recipe title
               <input
@@ -134,7 +131,7 @@ export function RecipeEditor() {
                 maxLength={200}
                 value={recipe.title}
                 onChange={(e) => field("title", e.target.value)}
-                placeholder="What are we making?"
+                placeholder="Recipe title"
               />
             </label>
             <label>
@@ -143,7 +140,7 @@ export function RecipeEditor() {
                 maxLength={10000}
                 value={recipe.description}
                 onChange={(e) => field("description", e.target.value)}
-                placeholder="A little about this recipe…"
+                placeholder="Description"
               />
             </label>
             <div className="three-columns">
@@ -286,7 +283,7 @@ export function RecipeEditor() {
                       onChange={(e) =>
                         updateRow("steps", index, { text: e.target.value })
                       }
-                      placeholder="What happens next?"
+                      placeholder="Step instructions"
                     />
                   </label>
                   <RowActions
@@ -314,7 +311,7 @@ export function RecipeEditor() {
                 maxLength={2000}
                 value={recipe.source}
                 onChange={(e) => field("source", e.target.value)}
-                placeholder="A book, a website, or a note about where it came from."
+                placeholder="Book, URL, or other source"
               />
             </label>
           </section>
@@ -464,7 +461,6 @@ export function RecipeView() {
       <ErrorMessage error={error} />
       <div className={`recipe-hero ${cover ? "with-photo" : ""}`}>
         <div>
-          <span className="eyebrow">FROM THE RECIPE BOX</span>
           <h1>{recipe.title}</h1>
           {recipe.description ? (
             <p className="recipe-description">{recipe.description}</p>
@@ -562,10 +558,9 @@ export function RecipeView() {
         </section>
       ) : null}
       <section className="panel no-print">
-        <h2>Keep it in a box</h2>
+        <h2>Boxes</h2>
         <p className="hint">
-          Anyone here can organize recipes. A recipe can belong to more than one
-          box.
+          All users can add or remove this recipe from boxes.
         </p>
         {boxes.length ? (
           <fieldset disabled={busy} className="box-checks">
@@ -599,7 +594,7 @@ export function RecipeView() {
           </fieldset>
         ) : (
           <p>
-            No boxes yet. <Link to="/">Create one from your collection.</Link>
+            No boxes yet. <Link to="/">Manage boxes</Link>
           </p>
         )}
       </section>
@@ -610,7 +605,7 @@ export function RecipeView() {
             <p className="hint">
               {mine
                 ? "JPEG, PNG, or WebP · 10 MB per photo · Up to 30 photos"
-                : "A closer look at the recipe."}
+                : null}
             </p>
           </div>
           {mine ? (
@@ -627,9 +622,7 @@ export function RecipeView() {
           ) : null}
         </div>
         {!recipe.photos.length ? (
-          <p className="photo-empty">
-            {mine ? "Add a photo of your finished dish." : "No photos yet."}
-          </p>
+          <p className="photo-empty">No photos yet</p>
         ) : (
           <div className="photo-grid">
             {recipe.photos.map((photo) => (
