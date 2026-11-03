@@ -32,17 +32,14 @@ export function createApp(config, options = {}) {
       if (!data.health()) throw new Error("Database unavailable");
       res.json({ ok: true, database: "ok", version: config.version });
     } catch {
-      res
-        .status(503)
-        .json({
-          ok: false,
-          database: "unavailable",
-          version: config.version,
-          request_id: req.requestId,
-        });
+      res.status(503).json({
+        ok: false,
+        database: "unavailable",
+        version: config.version,
+        request_id: req.requestId,
+      });
     }
   });
-  app.use(express.json({ limit: "1mb" }));
   app.use(
     session({
       name: "recipebox.sid",
@@ -64,6 +61,7 @@ export function createApp(config, options = {}) {
       req.user = data.user(req.session.userId);
     next();
   });
+  app.use(express.json({ limit: "1mb" }));
   const requireLogin = (req, res, next) =>
     req.user ? next() : next(new HttpError(401, "Login required"));
   app.use("/auth", csrfProtection(config), authRouter(config, data, audit));

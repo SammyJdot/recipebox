@@ -136,7 +136,9 @@ action, entity type/key, and a short fixed detail. Audit rows are append-only,
 enforced by SQLite triggers. Login success/failure, logout, recipe/box changes,
 box organization, and photo changes go to both logs and audit rows. Registration
 and out-of-band password resets are also audited. Invalid CSRF requests are
-rejected before any mutation. Authentication validation failures are audited.
+rejected before any mutation. Authentication validation failures are audited. Cascaded photo deletions use the
+same atomic audit helper as the recipe deletion. Startup logs have a null request
+ID; logs for requests and mutations carry the generated ID.
 
 The PWA manifest supports installation. RecipeBox requires a connection to the
 server; v1 deliberately has no service worker caching of private recipe data.

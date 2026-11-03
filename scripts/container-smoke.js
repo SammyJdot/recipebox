@@ -169,8 +169,9 @@ try {
     p2.body.id,
   );
   assert.equal((await a(`/api/photos/${p2.body.id}`, "DELETE")).status, 204);
-  assert.equal((await a(`/api/recipes/${id}`, "DELETE")).status, 204);
   assert.equal((await b(`/api/boxes/${two.id}`, "DELETE")).status, 204);
+  assert.equal((await a(`/api/recipes/${id}`)).status, 200);
+  assert.equal((await a(`/api/recipes/${id}`, "DELETE")).status, 204);
   docker(["compose", "restart"]);
   for (let i = 0; i < 30; i++) {
     try {
@@ -219,7 +220,7 @@ try {
     "node",
     "--input-type=module",
     "-e",
-    `import {existsSync} from 'node:fs'; for(const p of ['/app/.env','/app/.git','/app/tests','/app/docs','/app/web','/app/recipebox.db','/app/node_modules/@playwright']) if(existsSync(p)) process.exit(1);`,
+    `import {existsSync} from 'node:fs'; for(const p of ['/app/.env','/app/.git','/app/tests','/app/docs','/app/web','/app/recipebox.db','/app/node_modules/@playwright/test/package.json','/app/node_modules/playwright/package.json','/app/node_modules/vite/package.json']) if(existsSync(p)) { console.error('Unexpected development artifact: '+p); process.exit(1); }`,
   ]);
   console.log(
     "Docker acceptance passed: authentication, permissions, recipes, boxes, photos, search, scaling, print, logs, audits and restart persistence.",

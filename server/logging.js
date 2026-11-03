@@ -7,6 +7,7 @@ export function createLogger(
       timestamp: new Date().toISOString(),
       level,
       service: "recipebox",
+      request_id: null,
       event,
       ...fields,
     });
@@ -43,20 +44,25 @@ export function auditHelper(data, log) {
     work = () => undefined,
     actor = req.user,
   ) => {
-    let resolvedId = entityId;
+    const events = [];
+    const record = (event, type, id, summary) => {
+      data.audit(actor, event, type, id, summary);
+      events.push({ event, entity_type: type, entity_id: id, detail: summary });
+    };
     const value = data.transaction(() => {
-      const result = work();
-      if (typeof entityId === "function") resolvedId = entityId(result);
-      data.audit(actor, action, entityType, resolvedId, detail);
+      const result = work(record);
+      const resolvedId =
+        typeof entityId === "function" ? entityId(result) : entityId;
+      record(action, entityType, resolvedId, detail);
       return result;
     });
-    log("info", action, {
-      request_id: req.requestId,
-      ...(actor ? { user_id: actor.id } : {}),
-      entity_type: entityType,
-      entity_id: resolvedId,
-      detail,
-    });
+    for (const { event, ...fields } of events) {
+      log("info", event, {
+        request_id: req.requestId,
+        ...(actor ? { user_id: actor.id } : {}),
+        ...fields,
+      });
+    }
     return value;
   };
 }

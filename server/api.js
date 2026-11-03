@@ -102,27 +102,12 @@ export function apiRouter(config, data, audit, log) {
     const r = recipe(req.params.id);
     author(req, r);
     // Cascaded photo deletions receive their own audit events in the same transaction.
-    audit(req, "recipe.deleted", "recipe", r.id, "Recipe deleted", () => {
+    audit(req, "recipe.deleted", "recipe", r.id, "Recipe deleted", (record) => {
       r.photos.forEach((p) =>
-        data.audit(
-          req.user,
-          "photo.deleted",
-          "photo",
-          String(p.id),
-          "Deleted with recipe",
-        ),
+        record("photo.deleted", "photo", p.id, "Deleted with recipe"),
       );
       data.deleteRecipe(r.id);
     });
-    r.photos.forEach((p) =>
-      log("info", "photo.deleted", {
-        request_id: req.requestId,
-        user_id: req.user.id,
-        entity_type: "photo",
-        entity_id: p.id,
-        detail: "Deleted with recipe",
-      }),
-    );
     await deleteFiles(
       r.photos.map((p) => p.stored_filename),
       req,

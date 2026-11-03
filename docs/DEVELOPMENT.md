@@ -108,7 +108,7 @@ state and credentials are ephemeral and kept out of tracked files.
 The container smoke test starts Compose with a disposable named project/volume,
 checks empty data, local login, author permissions, recipe and box CRUD,
 multi-box organization, photos/covers/thumbnails, search, hashes, audits,
-stdout request IDs, restart persistence, and runtime image hygiene. It also runs
+stdout request IDs, restart persistence, and runtime image hygiene (checking installed development package files rather than empty npm namespace directories). It also runs
 the browser suite against that running image using `RECIPEBOX_TEST_URL`, then
 removes **only its own** test volume. It requires Docker; a source build is not a Docker acceptance test.
 
@@ -121,7 +121,7 @@ Dependencies are lockfile-pinned; review `npm audit` when updating dependencies.
 
 1. Validate inputs on the server; reject client author/creator/role assignments.
 2. Load the current user from the shared session, and enforce ownership in the route. Use `requireAdmin` for future admin-only routes; no admin UI exists in v1.
-3. Use the single audit helper for every successful business mutation. The helper commits the change and append-only audit record together, then writes the corresponding JSON stdout event. Photo cascades also produce photo-delete records/events.
+3. Use the single audit helper for every successful business mutation. The helper commits the change and append-only audit record together, then writes the corresponding JSON stdout event. Photo cascades pass secondary events through that same helper so every record and log shares one transaction outcome. No success event is emitted for a rolled-back mutation.
 4. Give events stable names, entity type/key and a short fixed detail. Never include secrets, tokens, passwords, recipe bodies, arbitrary request parameters, or provider responses in logs. Keep actor snapshots in audit rows even if records later change.
 5. Preserve generated request IDs, `X-Request-Id`, JSON error shape, and the generic production error boundary. Query strings and OAuth codes must never enter access logs.
 6. Add meaningful tests for authorization and the data effect. Keep documentation in the same commit as the behavior it describes.
