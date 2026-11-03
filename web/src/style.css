@@ -949,3 +949,25 @@ dialog.modal::backdrop {
     break-after: avoid;
   }
 }
+
+.photo-meta,
+.comment-meta {
+  font-size: 0.85rem;
+  color: #505660;
+}
+.photo-meta {
+  padding: 0 0.75rem;
+}
+.comment {
+  border-bottom: 1px solid #d6dae0;
+  padding: 1rem 0;
+}
+.comment-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.comment-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}

@@ -59,8 +59,28 @@ export function openData(dataDir) {
     CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit log is append-only'); END;
     CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit log is append-only'); END;
     CREATE TABLE IF NOT EXISTS sessions (sid TEXT PRIMARY KEY, data TEXT NOT NULL, expires INTEGER NOT NULL);
-    PRAGMA user_version=1;
+
   `);
+  // Preserve existing cover selections when upgrading the v1 schema.
+  if (
+    !sql
+      .prepare("PRAGMA table_info(recipes)")
+      .all()
+      .some((c) => c.name === "manual_cover_photo_id")
+  ) {
+    sql.exec(`BEGIN IMMEDIATE;
+      ALTER TABLE recipes ADD COLUMN manual_cover_photo_id INTEGER REFERENCES photos(id) ON DELETE SET NULL;
+      UPDATE recipes SET manual_cover_photo_id=(SELECT id FROM photos WHERE recipe_id=recipes.id AND is_cover=1);
+      COMMIT;`);
+  }
+  sql.exec(`CREATE TABLE IF NOT EXISTS comments (
+    id INTEGER PRIMARY KEY, recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    author_id INTEGER NOT NULL REFERENCES users(id), text TEXT NOT NULL CHECK(length(trim(text)) BETWEEN 1 AND 2000),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+  CREATE INDEX IF NOT EXISTS comments_recipe ON comments(recipe_id,created_at,id);
+  PRAGMA user_version=2;`);
   const get = (query, ...params) => sql.prepare(query).get(...params);
   const all = (query, ...params) => sql.prepare(query).all(...params);
   const run = (query, ...params) => sql.prepare(query).run(...params);
@@ -99,9 +119,13 @@ export function openData(dataDir) {
         id,
       ),
       photos: all(
-        "SELECT * FROM photos WHERE recipe_id=? ORDER BY position, id",
+        "SELECT p.*, u.display_name AS uploader_name FROM photos p JOIN users u ON u.id=p.uploaded_by WHERE recipe_id=? ORDER BY p.created_at, p.id",
         id,
       ).map(photo),
+      comments: all(
+        "SELECT c.*, u.display_name AS author_name FROM comments c JOIN users u ON u.id=c.author_id WHERE recipe_id=? ORDER BY c.created_at,c.id",
+        id,
+      ),
     };
   };
   const content = (id, recipe) => {
@@ -299,7 +323,10 @@ export function openData(dataDir) {
         recipeId,
       ),
     photo: (id) => {
-      const p = get("SELECT * FROM photos WHERE id=?", id);
+      const p = get(
+        "SELECT p.*, u.display_name AS uploader_name FROM photos p JOIN users u ON u.id=p.uploaded_by WHERE p.id=?",
+        id,
+      );
       return p ? photo(p) : null;
     },
     photoFile: (name) =>
@@ -309,41 +336,65 @@ export function openData(dataDir) {
       ),
     createPhoto(recipeId, stored, original, userId) {
       const row = get(
-        "SELECT COUNT(*) AS count, COALESCE(MAX(position),-1)+1 AS next FROM photos WHERE recipe_id=?",
+        "SELECT COALESCE(MAX(position),-1)+1 AS next FROM photos WHERE recipe_id=?",
         recipeId,
       );
-      return Number(
+      const photoId = Number(
         run(
           "INSERT INTO photos(recipe_id,stored_filename,original_filename,is_cover,position,uploaded_by) VALUES(?,?,?,?,?,?)",
           recipeId,
           stored,
           original,
-          row.count === 0 ? 1 : 0,
+          0,
           row.next,
           userId,
         ).lastInsertRowid,
       );
+      data.syncCover(recipeId);
+      return photoId;
+    },
+    syncCover(recipeId) {
+      const selected = get(
+        `SELECT p.id FROM photos p JOIN recipes r ON r.id=p.recipe_id
+        WHERE r.id=? ORDER BY (p.id=r.manual_cover_photo_id) IS TRUE DESC,
+        (p.uploaded_by=r.author_id) DESC, p.created_at, p.id LIMIT 1`,
+        recipeId,
+      );
+      run("UPDATE photos SET is_cover=0 WHERE recipe_id=?", recipeId);
+      if (selected) run("UPDATE photos SET is_cover=1 WHERE id=?", selected.id);
     },
     cover(recipeId, photoId) {
-      run("UPDATE photos SET is_cover=0 WHERE recipe_id=?", recipeId);
       run(
-        "UPDATE photos SET is_cover=1 WHERE recipe_id=? AND id=?",
-        recipeId,
+        "UPDATE recipes SET manual_cover_photo_id=? WHERE id=?",
         photoId,
+        recipeId,
       );
+      data.syncCover(recipeId);
       run(`UPDATE recipes SET updated_at=${stamp} WHERE id=?`, recipeId);
     },
     deletePhoto(id) {
       const p = data.photo(id);
       run("DELETE FROM photos WHERE id=?", id);
-      if (p.is_cover) {
-        const next = get(
-          "SELECT id FROM photos WHERE recipe_id=? ORDER BY position,id LIMIT 1",
-          p.recipe_id,
-        );
-        if (next) data.cover(p.recipe_id, next.id);
-      }
+      data.syncCover(p.recipe_id);
     },
+    comment: (id) => get("SELECT * FROM comments WHERE id=?", id),
+    createComment(recipeId, authorId, text) {
+      return Number(
+        run(
+          "INSERT INTO comments(recipe_id,author_id,text) VALUES(?,?,?)",
+          recipeId,
+          authorId,
+          text,
+        ).lastInsertRowid,
+      );
+    },
+    updateComment: (id, text) =>
+      run(
+        `UPDATE comments SET text=?,updated_at=${stamp} WHERE id=?`,
+        text,
+        id,
+      ),
+    deleteComment: (id) => run("DELETE FROM comments WHERE id=?", id),
     resetPassword(username, hash) {
       const result = run(
         "UPDATE users SET password_hash=? WHERE username=? AND password_hash IS NOT NULL",

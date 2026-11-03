@@ -30,7 +30,10 @@ test("register, create, organize, search, scale, print and manage photos", async
         name: "No recipes yet",
       }),
     ).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("empty-dashboard.png"), fullPage: true });
+  await page.screenshot({
+    path: testInfo.outputPath("empty-dashboard.png"),
+    fullPage: true,
+  });
   await page
     .getByRole("button", { name: "Create a box", exact: true })
     .first()
@@ -82,7 +85,7 @@ test("register, create, organize, search, scale, print and manage photos", async
     mimeType: "image/png",
     buffer: image,
   });
-  await page.getByRole("button", { name: "Make cover" }).click();
+  await page.getByRole("button", { name: "Set as cover" }).nth(1).click();
   await expect(
     page
       .locator(".photo-card")
@@ -90,6 +93,35 @@ test("register, create, organize, search, scale, print and manage photos", async
       .getByText("Cover photo", { exact: true }),
   ).toBeVisible();
   await expect(page.locator(".cover-photo")).toBeVisible();
+  await page.getByRole("button", { name: "Clear manual cover" }).click();
+  await expect(
+    page
+      .locator(".photo-card")
+      .first()
+      .getByText("Cover photo", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel("Comment", { exact: true })
+    .fill("Plain text < 2 & &lt;script&gt;");
+  await page.getByRole("button", { name: "Add comment", exact: true }).click();
+  await expect(page.locator(".comment-text")).toHaveText(
+    "Plain text < 2 & &lt;script&gt;",
+  );
+  await expect(page.locator(".comments-section script")).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit comment", exact: true }).click();
+  await page
+    .locator(".comment")
+    .getByLabel("Comment", { exact: true })
+    .fill("Updated comment");
+  await page.getByRole("button", { name: "Save comment", exact: true }).click();
+  await expect(page.locator(".comment-text")).toHaveText("Updated comment");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page
+    .getByRole("button", { name: "Delete comment", exact: true })
+    .click();
+  await expect(
+    page.getByText("No comments yet", { exact: true }),
+  ).toBeVisible();
   await page.emulateMedia({ media: "print" });
   await expect(page.locator(".site-header")).not.toBeVisible();
   await expect(
@@ -146,4 +178,120 @@ test("register, create, organize, search, scale, print and manage photos", async
   await page.getByRole("button", { name: "Log out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("a second user comments and uploads through the recipe UI with restricted controls", async ({
+  page,
+  browser,
+  baseURL,
+}, testInfo) => {
+  const suffix = randomBytes(5).toString("hex");
+  const otherContext = await browser.newContext({
+    baseURL,
+    viewport: testInfo.project.use.viewport,
+  });
+  const register = async (context, username, displayName) => {
+    const auth = await context.request.get("/auth/config");
+    const response = await context.request.post("/auth/register", {
+      headers: {
+        Origin: baseURL,
+        "X-CSRF-Token": (await auth.json()).csrf_token,
+      },
+      data: {
+        username,
+        display_name: displayName,
+        password: randomBytes(20).toString("hex"),
+      },
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()).csrf_token;
+  };
+  try {
+    const token = await register(
+      page.context(),
+      `author-${suffix}`,
+      "Recipe author",
+    );
+    await register(otherContext, `member-${suffix}`, "Photo uploader");
+    const response = await page.request.post("/api/recipes", {
+      headers: { Origin: baseURL, "X-CSRF-Token": token },
+      data: {
+        title: `Shared recipe ${suffix}`,
+        servings: 2,
+        ingredients: [{ item: "flour" }],
+        steps: [{ text: "Mix." }],
+      },
+    });
+    expect(response.status()).toBe(201);
+    const recipe = await response.json();
+    const otherPage = await otherContext.newPage();
+    await otherPage.goto(`/recipes/${recipe.id}`);
+    await expect(
+      otherPage.getByRole("link", { name: "Edit recipe", exact: true }),
+    ).toHaveCount(0);
+    const image = await sharp({
+      create: { width: 600, height: 400, channels: 3, background: "#789" },
+    })
+      .png()
+      .toBuffer();
+    await otherPage
+      .getByLabel("Upload photo")
+      .setInputFiles({
+        name: "result.png",
+        mimeType: "image/png",
+        buffer: image,
+      });
+    await expect(otherPage.locator(".photo-meta")).toContainText(
+      "Photo uploader",
+    );
+    await expect(otherPage.locator(".photo-meta time")).toHaveAttribute(
+      "datetime",
+      /.+/,
+    );
+    await expect(
+      otherPage.getByRole("button", { name: "Set as cover", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      otherPage.getByRole("button", { name: "Delete photo", exact: true }),
+    ).toBeVisible();
+    await otherPage.getByLabel("Comment", { exact: true }).fill("Test result");
+    await otherPage
+      .getByRole("button", { name: "Add comment", exact: true })
+      .click();
+    await expect(otherPage.locator(".comment-text")).toHaveText("Test result");
+    await page.goto(`/recipes/${recipe.id}`);
+    await expect(page.locator(".photo-meta")).toContainText("Photo uploader");
+    await expect(
+      page.getByRole("button", { name: "Set as cover", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Delete photo", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Edit comment", exact: true }),
+    ).toHaveCount(0);
+    page.once("dialog", (dialog) => dialog.accept());
+    await page
+      .getByRole("button", { name: "Delete comment", exact: true })
+      .click();
+    await expect(
+      page.getByText("No comments yet", { exact: true }),
+    ).toBeVisible();
+    otherPage.once("dialog", (dialog) => dialog.accept());
+    await otherPage
+      .getByRole("button", { name: "Delete photo", exact: true })
+      .click();
+    await expect(
+      otherPage.getByText("No photos yet", { exact: true }),
+    ).toBeVisible();
+    expect(
+      (
+        await page.request.delete(`/api/recipes/${recipe.id}`, {
+          headers: { Origin: baseURL, "X-CSRF-Token": token },
+        })
+      ).status(),
+    ).toBe(204);
+  } finally {
+    await otherContext.close();
+  }
 });

@@ -9,7 +9,8 @@ copy for the kitchen. RecipeBox starts empty: no default users, recipes, or boxe
 - Shared boxes; recipes can belong to multiple boxes.
 - Title and ingredient search with a box filter.
 - Ordered ingredients and steps, fractional serving scaling, sources, and print view.
-- JPEG, PNG, and WebP photos with cover selection and generated thumbnails.
+- Shared JPEG, PNG, and WebP photo galleries, uploader labels, and automatic or manual covers.
+- Plain-text recipe comments with author editing and recipe-author moderation.
 - SQLite, server-side sessions, structured stdout logs, and append-only audit records.
 - One container and one persistent data volume. No external database required.
 
@@ -63,8 +64,8 @@ In OIDC mode all newly provisioned users are members; identity comes from the pr
 If no image has been published, build one locally instead:
 
 ```sh
-docker build --build-arg APP_VERSION=v0.1.0 -t recipebox:v0.1.0 .
-# Set RECIPEBOX_IMAGE=recipebox:v0.1.0 in .env, then:
+docker build --build-arg APP_VERSION=v0.2.0 -t recipebox:v0.2.0 .
+# Set RECIPEBOX_IMAGE=recipebox:v0.2.0 in .env, then:
 docker compose up -d --wait
 ```
 
@@ -108,9 +109,24 @@ No accounts are linked by matching email addresses.
 
 All logged-in users can see all boxes and recipes, create boxes and recipes, and
 add or remove any recipe from any box. Only a recipe's author can edit or delete
-it, upload/delete its photos, or choose its cover. Only a box's creator can edit
+it or choose its cover. Any logged-in user can upload photos to any recipe. A
+photo can be deleted by its uploader or the recipe author. Only a box's creator can edit
 or delete that box. Deleting a box keeps its recipes. Admin role does not override
 these ownership rules. Box membership, privacy, and invites are not implemented.
+
+Comments are flat plain text, ordered chronologically, with author and timestamp.
+Any logged-in user can comment on any recipe. Only the comment author can edit
+it; the comment author or recipe author can delete it. Comments must be non-empty,
+at most 2,000 characters, and contain no HTML. Text is escaped when rendered.
+Photos show uploader and timestamp in chronological upload order.
+
+The automatic cover is the earliest photo uploaded by the recipe author, falling
+back to the earliest other photo, then no image. An author's later upload takes
+priority over other users' photos. Only the recipe author can set a manual cover
+or clear it. A manual cover overrides automatic selection until changed, cleared,
+or deleted; deleting it restores automatic selection. This rule applies to recipe
+views, dashboard, search, and box lists. Existing v0.1.0 cover selections are
+preserved as manual covers during the automatic database migration.
 
 ## Data, health, and logging
 
@@ -134,9 +150,9 @@ query strings, OAuth codes, passwords, session IDs and tokens are never logged.
 The `audit_logs` table stores actor key and display-name snapshot, timestamp,
 action, entity type/key, and a short fixed detail. Audit rows are append-only,
 enforced by SQLite triggers. Login success/failure, logout, recipe/box changes,
-box organization, and photo changes go to both logs and audit rows. Registration
+box organization, photo changes, cover set/cleared, and comment changes go to both logs and audit rows. Registration
 and out-of-band password resets are also audited. Invalid CSRF requests are
-rejected before any mutation. Authentication validation failures are audited. Cascaded photo deletions use the
+rejected before any mutation. Authentication validation failures are audited. Cascaded photo and comment deletions use the
 same atomic audit helper as the recipe deletion. Startup logs have a null request
 ID; logs for requests and mutations carry the generated ID.
 

@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-03
+
+- Add chronological plain-text recipe comments, with author editing and author or recipe-owner deletion enforced on the server.
+- Allow every logged-in user to upload recipe photos, with uploader names and timestamps; restrict deletion to the uploader or recipe author.
+- Select covers automatically from the recipe author's earliest photo, then other uploads, with author-only manual overrides and automatic fallback.
+- Strip uploaded photo metadata and require authentication for original images and thumbnails.
+- Audit comment changes and cover selection, including deletion cascades and non-author uploads.
+- Migrate existing data without losing selected covers, and test permissions, cover behavior, metadata, migration, and desktop/mobile flows.
+
 ## [0.1.0] — 2026-11-03
 
 - Add local and OIDC login with shared server-side sessions and recipe author permissions.

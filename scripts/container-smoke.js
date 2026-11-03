@@ -146,7 +146,33 @@ try {
     form.append("photo", new Blob([buffer], { type: "image/png" }), "test.png");
     return call(`/api/recipes/${id}/photos`, "POST", form);
   }
-  assert.equal((await upload(b)).status, 403);
+  const comment = await b(`/api/recipes/${id}/comments`, "POST", {
+    text: "Test comment",
+  });
+  assert.equal(comment.status, 201);
+  assert.equal(
+    (await a(`/api/comments/${comment.body.id}`, "PUT", { text: "Denied" }))
+      .status,
+    403,
+  );
+  assert.equal(
+    (
+      await b(`/api/comments/${comment.body.id}`, "PUT", {
+        text: "Updated test comment",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await a(`/api/comments/${comment.body.id}`, "DELETE")).status,
+    204,
+  );
+  const shared = await upload(b);
+  assert.equal(shared.status, 201);
+  assert.equal(
+    (await b(`/api/photos/${shared.body.id}`, "DELETE")).status,
+    204,
+  );
   assert.equal(
     (await upload(a, Buffer.alloc(10 * 1024 * 1024 + 1))).status,
     413,
@@ -168,7 +194,20 @@ try {
     (await a(`/api/recipes/${id}`)).body.photos.find((p) => p.is_cover).id,
     p2.body.id,
   );
+  assert.equal(
+    (await a(`/api/recipes/${id}`, "PUT", { cover_photo_id: null })).status,
+    200,
+  );
+  assert.equal(
+    (await a(`/api/recipes/${id}`)).body.photos.find((p) => p.is_cover).id,
+    p1.body.id,
+  );
+  await a(`/api/recipes/${id}`, "PUT", { cover_photo_id: p2.body.id });
   assert.equal((await a(`/api/photos/${p2.body.id}`, "DELETE")).status, 204);
+  assert.equal(
+    (await a(`/api/recipes/${id}`)).body.photos.find((p) => p.is_cover).id,
+    p1.body.id,
+  );
   assert.equal((await b(`/api/boxes/${two.id}`, "DELETE")).status, 204);
   assert.equal((await a(`/api/recipes/${id}`)).status, 200);
   assert.equal((await a(`/api/recipes/${id}`, "DELETE")).status, 204);
@@ -194,7 +233,7 @@ try {
     import {DatabaseSync} from 'node:sqlite'; import assert from 'node:assert/strict';
     const db=new DatabaseSync('/data/recipebox.db');
     for(const u of db.prepare('SELECT password_hash FROM users').all()) assert.match(u.password_hash,/^\\$2[aby]\\$12\\$/);
-    for(const action of ['recipe.created','recipe.updated','recipe.deleted','photo.uploaded','photo.deleted']) assert.ok(db.prepare('SELECT 1 FROM audit_logs WHERE action=?').get(action));
+    for(const action of ['recipe.created','recipe.updated','recipe.deleted','photo.uploaded','photo.deleted','comment.created','comment.updated','comment.deleted','cover.set','cover.cleared']) assert.ok(db.prepare('SELECT 1 FROM audit_logs WHERE action=?').get(action));
     db.close();
   `,
   ]);

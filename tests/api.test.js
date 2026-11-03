@@ -13,7 +13,14 @@ test("fresh install is empty; health is public; all API routes require login and
   const f = await fixture(t);
   const health = await request(f.app).get("/health").expect(200);
   assert.deepEqual(health.body, { ok: true, database: "ok", version: "test" });
-  for (const table of ["users", "recipes", "boxes", "audit_logs"])
+  for (const table of [
+    "users",
+    "recipes",
+    "boxes",
+    "comments",
+    "photos",
+    "audit_logs",
+  ])
     assert.equal(
       f.inspect(`SELECT COUNT(*) AS count FROM ${table}`)[0].count,
       0,
@@ -276,13 +283,19 @@ test("photo validation, thumbnails, author checks, cover selection and delete", 
       .set("Origin", f.config.publicUrl)
       .set("X-CSRF-Token", token)
       .attach("photo", buffer, { filename, contentType });
-  await upload(
-    image,
-    "test.png",
-    "image/png",
-    other,
-    await other.csrf(),
-  ).expect(403);
+  const shared = (
+    await upload(
+      image,
+      "test.png",
+      "image/png",
+      other,
+      await other.csrf(),
+    ).expect(201)
+  ).body;
+  assert.equal(
+    (await other.call("delete", `/api/photos/${shared.id}`)).status,
+    204,
+  );
   await upload(Buffer.from("invalid")).expect(400);
   await upload(image, "test.svg", "image/svg+xml").expect(400);
   await upload(Buffer.alloc(10 * 1024 * 1024 + 1))
@@ -328,7 +341,7 @@ test("photo validation, thumbnails, author checks, cover selection and delete", 
   await assert.rejects(access(join(f.dir, "uploads", p1.stored_filename)));
   assert.ok(
     f.inspect("SELECT * FROM audit_logs WHERE action='photo.deleted'")
-      .length === 2,
+      .length === 3,
   );
 });
 

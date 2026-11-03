@@ -51,7 +51,7 @@ export const registerSchema = credentialsSchema.extend({
   email: z.union([z.email().max(254), z.literal("")]).optional(),
 });
 export const coverSchema = z
-  .object({ cover_photo_id: z.number().int().positive() })
+  .object({ cover_photo_id: z.number().int().positive().nullable() })
   .strict();
 export const linkSchema = z
   .object({ recipe_id: z.number().int().positive() })
@@ -79,3 +79,11 @@ export function id(value) {
     throw new HttpError(400, "Invalid ID");
   return Number(value);
 }
+
+export const commentSchema = z
+  .object({
+    text: text(2000)
+      .min(1)
+      .refine((value) => !/<[^>]*>/.test(value), "HTML is not allowed"),
+  })
+  .strict();

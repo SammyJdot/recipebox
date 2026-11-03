@@ -9,6 +9,7 @@ import {
   recipeSchema,
   boxSchema,
   coverSchema,
+  commentSchema,
   linkSchema,
   id,
   HttpError,
@@ -85,10 +86,20 @@ export function apiRouter(config, data, audit, log) {
     author(req, r);
     if (Object.hasOwn(req.body || {}, "cover_photo_id")) {
       const input = validate(coverSchema, req.body);
-      if (!r.photos.some((p) => p.id === input.cover_photo_id))
+      if (
+        input.cover_photo_id !== null &&
+        !r.photos.some((p) => p.id === input.cover_photo_id)
+      )
         throw new HttpError(400, "Cover photo must belong to this recipe");
-      audit(req, "recipe.updated", "recipe", r.id, "Cover photo selected", () =>
-        data.cover(r.id, input.cover_photo_id),
+      if (input.cover_photo_id === null && r.manual_cover_photo_id === null)
+        return res.json(r);
+      audit(
+        req,
+        input.cover_photo_id === null ? "cover.cleared" : "cover.set",
+        "recipe",
+        r.id,
+        `Photo ${input.cover_photo_id ?? r.manual_cover_photo_id ?? "none"}`,
+        () => data.cover(r.id, input.cover_photo_id),
       );
     } else {
       const input = validate(recipeSchema, req.body);
@@ -101,11 +112,31 @@ export function apiRouter(config, data, audit, log) {
   router.delete("/recipes/:id", async (req, res) => {
     const r = recipe(req.params.id);
     author(req, r);
-    // Cascaded photo deletions receive their own audit events in the same transaction.
+    // Cascaded photo and comment deletions receive their own audit events in the same transaction.
     audit(req, "recipe.deleted", "recipe", r.id, "Recipe deleted", (record) => {
       r.photos.forEach((p) =>
-        record("photo.deleted", "photo", p.id, "Deleted with recipe"),
+        record(
+          "photo.deleted",
+          "photo",
+          p.id,
+          `Recipe ${r.id}; uploader ${p.uploaded_by}; deleted with recipe`,
+        ),
       );
+      r.comments.forEach((c) =>
+        record(
+          "comment.deleted",
+          "comment",
+          c.id,
+          `Recipe ${r.id}; deleted with recipe`,
+        ),
+      );
+      if (r.manual_cover_photo_id)
+        record(
+          "cover.cleared",
+          "recipe",
+          r.id,
+          `Photo ${r.manual_cover_photo_id}; deleted with recipe`,
+        );
       data.deleteRecipe(r.id);
     });
     await deleteFiles(
@@ -188,7 +219,6 @@ export function apiRouter(config, data, audit, log) {
     (req, res, next) => {
       try {
         const r = recipe(req.params.id);
-        author(req, r);
         req.recipe = r;
         next();
       } catch (e) {
@@ -259,9 +289,17 @@ export function apiRouter(config, data, audit, log) {
           "photo.uploaded",
           "photo",
           (value) => value,
-          `Uploaded to recipe ${req.recipe.id}`,
-          () =>
-            data.createPhoto(req.recipe.id, filename, original, req.user.id),
+          `Recipe ${req.recipe.id}; uploader ${req.user.id}`,
+          () => {
+            if (recipe(req.recipe.id).photos.length >= 30)
+              throw new HttpError(400, "Maximum 30 photos per recipe");
+            return data.createPhoto(
+              req.recipe.id,
+              filename,
+              original,
+              req.user.id,
+            );
+          },
         );
         res.status(201).json(data.photo(photoId));
       } catch (e) {
@@ -273,16 +311,79 @@ export function apiRouter(config, data, audit, log) {
   router.delete("/photos/:photoId", async (req, res) => {
     const p = data.photo(id(req.params.photoId));
     if (!p) throw new HttpError(404, "Photo not found");
-    author(req, recipe(p.recipe_id));
+    const r = recipe(p.recipe_id);
+    if (p.uploaded_by !== req.user.id && r.author_id !== req.user.id)
+      throw new HttpError(
+        403,
+        "Only the photo uploader or recipe author can delete this photo",
+      );
     audit(
       req,
       "photo.deleted",
       "photo",
       p.id,
-      `Deleted from recipe ${p.recipe_id}`,
-      () => data.deletePhoto(p.id),
+      `Recipe ${p.recipe_id}; uploader ${p.uploaded_by}`,
+      (record) => {
+        if (r.manual_cover_photo_id === p.id)
+          record("cover.cleared", "recipe", r.id, `Photo ${p.id}; deleted`);
+        data.deletePhoto(p.id);
+      },
     );
     await deleteFiles([p.stored_filename], req);
+    res.status(204).end();
+  });
+  router.post("/recipes/:id/comments", (req, res) => {
+    const r = recipe(req.params.id);
+    const input = validate(commentSchema, req.body);
+    const commentId = audit(
+      req,
+      "comment.created",
+      "comment",
+      (value) => value,
+      `Recipe ${r.id}`,
+      () => data.createComment(r.id, req.user.id, input.text),
+    );
+    res
+      .status(201)
+      .json(data.recipe(r.id).comments.find((c) => c.id === commentId));
+  });
+  router.put("/comments/:commentId", (req, res) => {
+    const c = data.comment(id(req.params.commentId));
+    if (!c) throw new HttpError(404, "Comment not found");
+    if (c.author_id !== req.user.id)
+      throw new HttpError(403, "Only the comment author can edit this comment");
+    const input = validate(commentSchema, req.body);
+    audit(
+      req,
+      "comment.updated",
+      "comment",
+      c.id,
+      `Recipe ${c.recipe_id}`,
+      () => data.updateComment(c.id, input.text),
+    );
+    res.json(
+      data.recipe(c.recipe_id).comments.find((item) => item.id === c.id),
+    );
+  });
+  router.delete("/comments/:commentId", (req, res) => {
+    const c = data.comment(id(req.params.commentId));
+    if (!c) throw new HttpError(404, "Comment not found");
+    if (
+      c.author_id !== req.user.id &&
+      recipe(c.recipe_id).author_id !== req.user.id
+    )
+      throw new HttpError(
+        403,
+        "Only the comment author or recipe author can delete this comment",
+      );
+    audit(
+      req,
+      "comment.deleted",
+      "comment",
+      c.id,
+      `Recipe ${c.recipe_id}`,
+      () => data.deleteComment(c.id),
+    );
     res.status(204).end();
   });
   return router;

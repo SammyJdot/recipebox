@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useId } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "./api.js";
 import { ErrorMessage, Loading, useSession } from "./App.jsx";
@@ -399,9 +399,11 @@ export function RecipeView() {
     try {
       await api(path, { method, body });
       setRevision((v) => v + 1);
+      return true;
     } catch (e) {
       setError(e.message);
       setRevision((v) => v + 1);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -425,7 +427,7 @@ export function RecipeView() {
   const remove = async () => {
     if (
       !window.confirm(
-        "Delete this recipe and its photos? This cannot be undone.",
+        "Delete this recipe, photos, and comments? This cannot be undone.",
       )
     )
       return;
@@ -603,24 +605,30 @@ export function RecipeView() {
           <div>
             <h2>Photos</h2>
             <p className="hint">
-              {mine
-                ? "JPEG, PNG, or WebP · 10 MB per photo · Up to 30 photos"
-                : null}
+              JPEG, PNG, or WebP · 10 MB per photo · Up to 30 photos
             </p>
           </div>
-          {mine ? (
-            <label className={`button upload-button ${busy ? "disabled" : ""}`}>
-              + Add photo
-              <input
-                aria-label="Upload photo"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                disabled={busy}
-                onChange={upload}
-              />
-            </label>
-          ) : null}
+          <label className={`button upload-button ${busy ? "disabled" : ""}`}>
+            + Add photo
+            <input
+              aria-label="Upload photo"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              disabled={busy}
+              onChange={upload}
+            />
+          </label>
         </div>
+        {mine && recipe.manual_cover_photo_id ? (
+          <button
+            disabled={busy}
+            onClick={() =>
+              change(`/api/recipes/${id}`, "PUT", { cover_photo_id: null })
+            }
+          >
+            Clear manual cover
+          </button>
+        ) : null}
         {!recipe.photos.length ? (
           <p className="photo-empty">No photos yet</p>
         ) : (
@@ -634,23 +642,32 @@ export function RecipeView() {
                     loading="lazy"
                   />
                 </a>
+                <p className="photo-meta">
+                  {photo.uploader_name} ·{" "}
+                  <time dateTime={photo.created_at}>
+                    {new Date(photo.created_at).toLocaleString()}
+                  </time>
+                </p>
                 <div className="actions">
                   {photo.is_cover ? (
                     <span className="cover-badge">Cover photo</span>
-                  ) : mine ? (
+                  ) : null}
+                  {mine ? (
                     <button
                       className="quiet"
-                      disabled={busy}
+                      disabled={
+                        busy || recipe.manual_cover_photo_id === photo.id
+                      }
                       onClick={() =>
                         change(`/api/recipes/${id}`, "PUT", {
                           cover_photo_id: photo.id,
                         })
                       }
                     >
-                      Make cover
+                      Set as cover
                     </button>
                   ) : null}
-                  {mine ? (
+                  {mine || photo.uploaded_by === user.id ? (
                     <button
                       className="quiet danger"
                       disabled={busy}
@@ -668,6 +685,29 @@ export function RecipeView() {
           </div>
         )}
       </section>
+      <section className="panel comments-section no-print">
+        <h2>Comments</h2>
+        {!recipe.comments.length ? (
+          <p>No comments yet</p>
+        ) : (
+          recipe.comments.map((comment) => (
+            <Comment
+              key={comment.id}
+              comment={comment}
+              canEdit={comment.author_id === user.id}
+              canDelete={mine || comment.author_id === user.id}
+              busy={busy}
+              change={change}
+            />
+          ))
+        )}
+        <CommentForm
+          busy={busy}
+          onSave={(text) =>
+            change(`/api/recipes/${id}/comments`, "POST", { text })
+          }
+        />
+      </section>
       {busy ? (
         <p role="status" className="no-print">
           Saving changes…
@@ -681,5 +721,88 @@ export function RecipeView() {
         </div>
       ) : null}
     </article>
+  );
+}
+
+function CommentForm({ busy, onSave, initialText = "", onCancel }) {
+  const fieldId = useId();
+  const [text, setText] = useState(initialText);
+  return (
+    <form
+      className="comment-form"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (await onSave(text)) setText("");
+      }}
+    >
+      <label htmlFor={fieldId}>Comment</label>
+      <textarea
+        id={fieldId}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        required
+        maxLength={2000}
+        disabled={busy}
+      />
+      <div className="actions">
+        <button disabled={busy || !text.trim()}>
+          {onCancel ? "Save comment" : "Add comment"}
+        </button>
+        {onCancel ? (
+          <button type="button" disabled={busy} onClick={onCancel}>
+            Cancel
+          </button>
+        ) : null}
+      </div>
+    </form>
+  );
+}
+function Comment({ comment, canEdit, canDelete, busy, change }) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div className="comment">
+      <p className="comment-meta">
+        {comment.author_name} ·{" "}
+        <time dateTime={comment.created_at}>
+          {new Date(comment.created_at).toLocaleString()}
+        </time>
+        {comment.updated_at !== comment.created_at ? " · Edited" : null}
+      </p>
+      {editing ? (
+        <CommentForm
+          busy={busy}
+          initialText={comment.text}
+          onCancel={() => setEditing(false)}
+          onSave={async (text) => {
+            const saved = await change(`/api/comments/${comment.id}`, "PUT", {
+              text,
+            });
+            if (saved) setEditing(false);
+            return saved;
+          }}
+        />
+      ) : (
+        <p className="comment-text">{comment.text}</p>
+      )}
+      <div className="actions">
+        {canEdit && !editing ? (
+          <button disabled={busy} onClick={() => setEditing(true)}>
+            Edit comment
+          </button>
+        ) : null}
+        {canDelete ? (
+          <button
+            className="quiet danger"
+            disabled={busy}
+            onClick={() => {
+              if (window.confirm("Delete this comment?"))
+                change(`/api/comments/${comment.id}`, "DELETE");
+            }}
+          >
+            Delete comment
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }

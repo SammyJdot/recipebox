@@ -11,7 +11,7 @@ database, hosted service, or mandatory identity provider.
 - `server/db.js`: every SQL query, schema initialization, transactions, session store, and data mapping. Keep SQL out of routes and scripts so a later database swap stays contained.
 - `server/auth.js`: local and OIDC routes; one shared session and CSRF contract.
 - `server/logging.js`: JSON logger, request logging, audit helper, and `requireAdmin` foundation.
-- `server/api.js`: validated recipe, box, organization, and photo mutations with server-side ownership checks.
+- `server/api.js`: validated recipe, box, organization, comment, cover, and photo mutations with server-side ownership checks.
 - `server/app.js`: middleware, health, protected media, SPA, and JSON error handling.
 - `server/reset-password.js`: operator-only stdin password reset CLI, never an app route.
 - `web/src`: dashboard, editor, viewer, and quantity scaling. The light UI uses neutral colors, system sans-serif typography, functional labels, and plain empty states. Styling is mobile-first with print rules. In OIDC mode the signed-out page contains the RecipeBox header and Sign in control; local mode retains its login and registration forms.
@@ -78,7 +78,32 @@ and CSRF token. Clients must refresh auth config after logout. Auth routes live
 under `/auth`; application routes under `/api` all require login.
 Cover selection uses `PUT /api/recipes/:id` with only `{ "cover_photo_id": <id> }`;
 normal recipe updates use the complete validated recipe body. Photo uploads use
-multipart field `photo`; only authors may modify photos. Repeated add/remove box
+multipart field `photo`; any logged-in user can upload. The uploader or recipe
+author can delete a photo; only the recipe author can select a cover. Pass
+`{ "cover_photo_id": null }` to clear the manual override.
+
+`POST /api/recipes/:id/comments` and `PUT /api/comments/:commentId` accept only
+`{ "text": "plain text" }`. Comments require trimmed non-empty text up to 2,000
+characters and reject HTML tags. React renders them as escaped text.
+`DELETE /api/comments/:commentId` permits the comment author or recipe author;
+PUT permits only the comment author. All routes require login and CSRF protection.
+Comment and photo lists include author/uploader names and creation timestamps,
+ordered by creation time then ID.
+
+Schema version 2 adds comments and `recipes.manual_cover_photo_id`, preserving
+v1's selected cover as a manual override. Existing recipe and upload data remain
+in place; migrations run on startup. `data.syncCover` is the single cover-selection
+rule: manual cover, else earliest recipe-author upload, else earliest other
+upload, else none. Photo upload/deletion and cover set/clear recompute the
+`photos.is_cover` flag atomically through the audit helper. All recipe list queries
+and recipe details use that same flag. Deleting a manual cover clears its foreign
+key and recomputes the automatic cover. Clear/set actions emit `cover.cleared` /
+`cover.set` with recipe and photo IDs. Comment changes emit `comment.created`,
+`comment.updated`, `comment.deleted` with recipe/comment IDs; photo events include
+the uploader ID. Cascaded comment/photo deletions and manual-cover clearing are
+recorded in the recipe deletion transaction. Never log comment bodies.
+
+Repeated add/remove box
 operations are idempotent and audit only actual changes.
 
 ## Tests and checks
