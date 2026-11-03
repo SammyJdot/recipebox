@@ -1,0 +1,31 @@
+services:
+  recipebox:
+    image: ${RECIPEBOX_IMAGE:?Set RECIPEBOX_IMAGE to a version-tagged image}
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${HOST_PORT:-3000}:3000"
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL}
+      AUTH_MODE: ${AUTH_MODE:?Set AUTH_MODE to local or oidc}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET}
+      ALLOW_LOCAL_REGISTRATION: ${ALLOW_LOCAL_REGISTRATION:-true}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      ALLOWED_OIDC_GROUP: ${ALLOWED_OIDC_GROUP:-}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      APP_VERSION: ${APP_VERSION:-dev}
+      PORT: "3000"
+      DATA_DIR: /data
+    volumes:
+      - recipebox-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+volumes:
+  recipebox-data:
