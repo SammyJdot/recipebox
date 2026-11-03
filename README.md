@@ -7,7 +7,7 @@ copy for the kitchen. RecipeBox starts empty: no default users, recipes, or boxe
 - Mobile-first React interface and an installable PWA manifest.
 - Built-in local accounts or a standard OIDC identity provider, selected by configuration.
 - Shared boxes; recipes can belong to multiple boxes.
-- Title and ingredient search with a box filter.
+- Optional free-form tags, with title, ingredient, and tag search plus box and exact-tag filters.
 - Ordered ingredients and steps, fractional serving scaling, sources, and print view.
 - Shared JPEG, PNG, and WebP photo galleries, uploader labels, and automatic or manual covers.
 - Plain-text recipe comments with author editing and recipe-author moderation.
@@ -64,8 +64,8 @@ In OIDC mode all newly provisioned users are members; identity comes from the pr
 If no image has been published, build one locally instead:
 
 ```sh
-docker build --build-arg APP_VERSION=v0.2.0 -t recipebox:v0.2.0 .
-# Set RECIPEBOX_IMAGE=recipebox:v0.2.0 in .env, then:
+docker build --build-arg APP_VERSION=v0.3.0 -t recipebox:v0.3.0 .
+# Set RECIPEBOX_IMAGE=recipebox:v0.3.0 in .env, then:
 docker compose up -d --wait
 ```
 
@@ -127,6 +127,31 @@ or clear it. A manual cover overrides automatic selection until changed, cleared
 or deleted; deleting it restores automatic selection. This rule applies to recipe
 views, dashboard, search, and box lists. Existing v0.1.0 cover selections are
 preserved as manual covers during the automatic database migration.
+
+## Tags and servings
+
+Tags are optional and entered as a comma-separated list in the recipe form.
+There are no predefined tags. The server trims whitespace, lowercases, removes
+empty entries, and deduplicates on save. A recipe may have at most 10 tags, each
+at most 30 characters; HTML is rejected and text is escaped when rendered.
+Only the recipe author can change tags, through the normal audited recipe update.
+Tags appear on recipes and list cards. Search matches tags as well as titles and
+ingredients; clicking a recipe tag applies an exact tag filter. Box filtering
+continues to work with search and tags.
+
+New recipes start with a blank servings field. Servings are optional; when
+provided they must be whole numbers from 1 to 10,000. With no base servings,
+quantities display exactly as entered and the scaler is hidden. With a base,
+the scaler uses minimum 1 and step 1, with whole-number targets and the exact
+target/base ratio. Ingredient fractions remain supported independently.
+Existing servings are preserved during migration, including legacy fractional
+bases. For a fractional legacy base, the initial scaler target rounds up to a
+whole number without changing the stored base.
+
+The v0.2.0 spinner offset was reproduced in Firefox: a minimum of `0.01` with
+`step="any"` produced `4 → 4.01 → 5.01 → 6.01`. The same behavior occurred in a
+bare HTML input, without recipe calculations. Minimum 1 and step 1 now produce
+`4 → 5 → 6 → 5 → 4`; ingredient parsing and fraction formatting are unchanged.
 
 ## Data, health, and logging
 
@@ -197,8 +222,13 @@ docker compose up -d --wait
 To roll back, set both variables to the previous version tag and run the same
 commands. The named `/data` volume survives image replacement and container
 recreation. Never run `docker compose down --volumes` against data you want to
-keep. v1 uses schema version 1 with additive initialization; future releases must
-document schema compatibility and rollback limits before changing the schema.
+keep. v0.3.0 uses schema version 3: recipe tags are stored separately and servings
+can be null. Migration preserves existing servings and related recipe data.
+Earlier versions do not understand optional servings and tags. Before upgrading,
+make a consistent backup of the entire `/data` volume while the service is
+stopped. Rolling back to an earlier version requires its pre-upgrade data snapshot
+and image; changing the image tag alone is insufficient. Restoring that snapshot
+also discards changes made after the backup.
 
 ## Development and releases
 

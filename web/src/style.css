@@ -971,3 +971,31 @@ dialog.modal::backdrop {
   gap: 0.75rem;
   margin-top: 1rem;
 }
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+.tag {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+a.tag {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.active-tag {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}

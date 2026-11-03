@@ -20,7 +20,7 @@ jobs:
         run: node scripts/release-check.js
       - run: npm test
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox
       - run: docker build --pull --build-arg APP_VERSION="$GITHUB_REF_NAME" -t recipebox:ci .
       - run: node scripts/container-smoke.js
   publish:

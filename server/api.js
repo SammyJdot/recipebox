@@ -66,7 +66,20 @@ export function apiRouter(config, data, audit, log) {
     )
       throw new HttpError(400, "Search must be at most 200 characters");
     const boxId = req.query.box_id ? id(req.query.box_id) : null;
-    res.json(data.recipes(req.query.q || "", boxId));
+    if (
+      req.query.tag !== undefined &&
+      (typeof req.query.tag !== "string" ||
+        !req.query.tag.trim() ||
+        req.query.tag.trim().length > 30 ||
+        /<[^>]*>/.test(req.query.tag))
+    )
+      throw new HttpError(
+        400,
+        "Tag filter must be plain text, 1 to 30 characters",
+      );
+    const tag =
+      req.query.tag === undefined ? null : req.query.tag.trim().toLowerCase();
+    res.json(data.recipes(req.query.q || "", boxId, tag));
   });
   router.post("/recipes", (req, res) => {
     const input = validate(recipeSchema, req.body);

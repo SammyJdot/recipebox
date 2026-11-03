@@ -80,7 +80,44 @@ export function openData(dataDir) {
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   CREATE INDEX IF NOT EXISTS comments_recipe ON comments(recipe_id,created_at,id);
-  PRAGMA user_version=2;`);
+`);
+  // Rebuild only the parent table with foreign keys disabled to preserve every child row.
+  if (
+    sql
+      .prepare("PRAGMA table_info(recipes)")
+      .all()
+      .find((column) => column.name === "servings").notnull
+  ) {
+    sql.exec("PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE;");
+    try {
+      sql.exec(`CREATE TABLE recipes_v3 (
+        id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+        servings REAL, prep_minutes INTEGER, cook_minutes INTEGER, source TEXT NOT NULL DEFAULT '',
+        author_id INTEGER NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        manual_cover_photo_id INTEGER REFERENCES photos(id) ON DELETE SET NULL
+      );
+      INSERT INTO recipes_v3 SELECT id,title,description,servings,prep_minutes,cook_minutes,source,author_id,created_at,updated_at,manual_cover_photo_id FROM recipes;
+      DROP TABLE recipes;
+      ALTER TABLE recipes_v3 RENAME TO recipes;`);
+      if (sql.prepare("PRAGMA foreign_key_check").all().length)
+        throw new Error("Recipe migration foreign key check failed");
+      sql.exec("COMMIT");
+    } catch (error) {
+      sql.exec("ROLLBACK");
+      sql.close();
+      throw error;
+    } finally {
+      if (sql.isOpen) sql.exec("PRAGMA foreign_keys=ON");
+    }
+  }
+  sql.exec(`CREATE TABLE IF NOT EXISTS recipe_tags (
+    recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL, tag TEXT NOT NULL CHECK(length(tag) BETWEEN 1 AND 30),
+    PRIMARY KEY(recipe_id,tag), UNIQUE(recipe_id,position)
+  ); CREATE INDEX IF NOT EXISTS recipe_tags_tag ON recipe_tags(tag);
+  PRAGMA user_version=3;`);
   const get = (query, ...params) => sql.prepare(query).get(...params);
   const all = (query, ...params) => sql.prepare(query).all(...params);
   const run = (query, ...params) => sql.prepare(query).run(...params);
@@ -106,6 +143,10 @@ export function openData(dataDir) {
     if (!recipe) return null;
     return {
       ...recipe,
+      tags: all(
+        "SELECT tag FROM recipe_tags WHERE recipe_id=? ORDER BY position",
+        id,
+      ).map((row) => row.tag),
       ingredients: all(
         "SELECT quantity, unit, item, note FROM ingredients WHERE recipe_id=? ORDER BY position",
         id,
@@ -129,6 +170,15 @@ export function openData(dataDir) {
     };
   };
   const content = (id, recipe) => {
+    run("DELETE FROM recipe_tags WHERE recipe_id=?", id);
+    (recipe.tags || []).forEach((tag, position) =>
+      run(
+        "INSERT INTO recipe_tags(recipe_id,position,tag) VALUES(?,?,?)",
+        id,
+        position,
+        tag,
+      ),
+    );
     run("DELETE FROM ingredients WHERE recipe_id=?", id);
     recipe.ingredients.forEach((i, position) =>
       run(
@@ -229,21 +279,30 @@ export function openData(dataDir) {
     },
     login: (id) =>
       run(`UPDATE users SET last_login_at=${stamp} WHERE id=?`, id),
-    recipes(q, boxId) {
+    recipes(q, boxId, tag = null) {
       const term = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+      const tagTerm = `%${q.toLowerCase().replace(/[\\%_]/g, "\\$&")}%`;
       return all(
         `SELECT r.*, u.display_name AS author_name, p.stored_filename AS cover_filename FROM recipes r
         JOIN users u ON u.id=r.author_id LEFT JOIN photos p ON p.recipe_id=r.id AND p.is_cover=1
-        WHERE (?='' OR r.title LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM ingredients i WHERE i.recipe_id=r.id AND i.item LIKE ? ESCAPE '\\'))
+        WHERE (?='' OR r.title LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM ingredients i WHERE i.recipe_id=r.id AND i.item LIKE ? ESCAPE '\\') OR EXISTS(SELECT 1 FROM recipe_tags t WHERE t.recipe_id=r.id AND t.tag LIKE ? ESCAPE '\\'))
         AND (? IS NULL OR EXISTS(SELECT 1 FROM recipe_boxes rb WHERE rb.recipe_id=r.id AND rb.box_id=?))
+        AND (? IS NULL OR EXISTS(SELECT 1 FROM recipe_tags t WHERE t.recipe_id=r.id AND t.tag=?))
         ORDER BY r.updated_at DESC, r.id DESC LIMIT 500`,
         q,
         term,
         term,
+        tagTerm,
         boxId,
         boxId,
+        tag,
+        tag,
       ).map((r) => ({
         ...r,
+        tags: all(
+          "SELECT tag FROM recipe_tags WHERE recipe_id=? ORDER BY position",
+          r.id,
+        ).map((row) => row.tag),
         thumbnail_url: r.cover_filename
           ? `/media/${r.cover_filename}.thumb.webp`
           : null,
@@ -255,7 +314,7 @@ export function openData(dataDir) {
         "INSERT INTO recipes(title,description,servings,prep_minutes,cook_minutes,source,author_id) VALUES(?,?,?,?,?,?,?)",
         input.title,
         input.description,
-        input.servings,
+        input.servings ?? null,
         input.prep_minutes,
         input.cook_minutes,
         input.source,
@@ -270,7 +329,7 @@ export function openData(dataDir) {
         `UPDATE recipes SET title=?,description=?,servings=?,prep_minutes=?,cook_minutes=?,source=?,updated_at=${stamp} WHERE id=?`,
         input.title,
         input.description,
-        input.servings,
+        input.servings ?? null,
         input.prep_minutes,
         input.cook_minutes,
         input.source,

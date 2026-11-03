@@ -153,7 +153,7 @@ test("register, create, organize, search, scale, print and manage photos", async
   await page.getByRole("link", { name: "← All recipes" }).click();
   await page.getByRole("button", { name: new RegExp(boxName) }).click();
   await page
-    .getByLabel("Search by title or ingredient")
+    .getByLabel("Search by title, ingredient, or tag")
     .fill(`flour-${suffix}`);
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(
@@ -234,13 +234,11 @@ test("a second user comments and uploads through the recipe UI with restricted c
     })
       .png()
       .toBuffer();
-    await otherPage
-      .getByLabel("Upload photo")
-      .setInputFiles({
-        name: "result.png",
-        mimeType: "image/png",
-        buffer: image,
-      });
+    await otherPage.getByLabel("Upload photo").setInputFiles({
+      name: "result.png",
+      mimeType: "image/png",
+      buffer: image,
+    });
     await expect(otherPage.locator(".photo-meta")).toContainText(
       "Photo uploader",
     );

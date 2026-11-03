@@ -77,7 +77,9 @@ try {
   assert.equal((await a("/api/boxes")).body.length, 0);
   assert.equal((await a("/api/recipes")).body.length, 0);
   assert.equal((await a("/auth/oidc")).status, 404);
+  const tag = randomBytes(8).toString("hex");
   const input = {
+    tags: [` ${tag.toUpperCase()} `, tag],
     title: "Container bread",
     description: "Private recipe description",
     servings: 4,
@@ -90,6 +92,28 @@ try {
   const created = await a("/api/recipes", "POST", input);
   assert.equal(created.status, 201);
   const id = created.body.id;
+  assert.deepEqual(created.body.tags, [tag]);
+  assert.equal((await a(`/api/recipes?q=${tag}`)).body[0].id, id);
+  assert.equal((await a(`/api/recipes?tag=${tag}`)).body[0].id, id);
+  const optional = await a("/api/recipes", "POST", {
+    ...input,
+    servings: null,
+  });
+  assert.equal(optional.status, 201);
+  assert.equal(optional.body.servings, null);
+  assert.equal(
+    (
+      await a(`/api/recipes/${optional.body.id}`, "PUT", {
+        ...input,
+        servings: 4.01,
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await a(`/api/recipes/${optional.body.id}`, "DELETE")).status,
+    204,
+  );
   assert.equal((await b(`/api/recipes/${id}`, "PUT", input)).status, 403);
   assert.equal((await b(`/api/recipes/${id}`, "DELETE")).status, 403);
   assert.equal(

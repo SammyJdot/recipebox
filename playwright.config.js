@@ -16,6 +16,11 @@ export default defineConfig({
       use: { browserName: "chromium", viewport: { width: 1366, height: 900 } },
     },
     {
+      name: "firefox-scaler",
+      testMatch: "servings.spec.js",
+      use: { browserName: "firefox", viewport: { width: 1366, height: 900 } },
+    },
+    {
       name: "mobile",
       use: {
         browserName: "chromium",

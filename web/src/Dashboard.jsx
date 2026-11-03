@@ -7,6 +7,7 @@ export function Dashboard() {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") || "";
   const boxId = params.get("box_id") || "";
+  const tag = params.get("tag") || "";
   const [search, setSearch] = useState(q);
   const [boxes, setBoxes] = useState([]);
   const [recipes, setRecipes] = useState(null);
@@ -19,9 +20,12 @@ export function Dashboard() {
     setError("");
     setRecipes(null);
     Promise.all([
-      api(`/api/recipes?${new URLSearchParams({ q, box_id: boxId })}`, {
-        signal: controller.signal,
-      }),
+      api(
+        `/api/recipes?${new URLSearchParams({ q, box_id: boxId, ...(tag ? { tag } : {}) })}`,
+        {
+          signal: controller.signal,
+        },
+      ),
       api("/api/boxes", { signal: controller.signal }),
     ])
       .then(([r, b]) => {
@@ -32,13 +36,17 @@ export function Dashboard() {
         if (e.name !== "AbortError") setError(e.message);
       });
     return () => controller.abort();
-  }, [q, boxId, revision]);
+  }, [q, boxId, tag, revision]);
   useEffect(() => {
     setSearch(q);
   }, [q]);
   const selected = boxes.find((b) => String(b.id) === boxId);
   const filter = (id) =>
-    setParams({ ...(q ? { q } : {}), ...(id ? { box_id: id } : {}) });
+    setParams({
+      ...(q ? { q } : {}),
+      ...(id ? { box_id: id } : {}),
+      ...(tag ? { tag } : {}),
+    });
   const saveBox = async (event) => {
     event.preventDefault();
     setBusy(true);
@@ -89,11 +97,12 @@ export function Dashboard() {
           setParams({
             ...(search ? { q: search } : {}),
             ...(boxId ? { box_id: boxId } : {}),
+            ...(tag ? { tag } : {}),
           });
         }}
       >
         <label className="sr-only" htmlFor="recipe-search">
-          Search by title or ingredient
+          Search by title, ingredient, or tag
         </label>
         <span aria-hidden="true">⌕</span>
         <input
@@ -101,11 +110,26 @@ export function Dashboard() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           maxLength={200}
-          placeholder="Search by title or ingredient…"
+          placeholder="Search by title, ingredient, or tag…"
         />
         <button type="submit">Search</button>
       </form>
       <ErrorMessage error={error} />
+      {tag ? (
+        <div className="active-tag">
+          <span>Tag: {tag}</span>
+          <button
+            onClick={() =>
+              setParams({
+                ...(q ? { q } : {}),
+                ...(boxId ? { box_id: boxId } : {}),
+              })
+            }
+          >
+            Clear tag filter
+          </button>
+        </div>
+      ) : null}
       <div className="collection-layout">
         <aside className="box-sidebar">
           <div className="section-heading">
@@ -151,7 +175,7 @@ export function Dashboard() {
               <h2>
                 {selected
                   ? selected.name
-                  : q
+                  : q || tag
                     ? "Search results"
                     : "Recent recipes"}
               </h2>
@@ -197,13 +221,24 @@ export function Dashboard() {
                     <div className="recipe-card-content">
                       <h3>{r.title}</h3>
                       {r.description ? <p>{r.description}</p> : null}
+                      {r.tags.length ? (
+                        <div className="tags">
+                          {r.tags.slice(0, 3).map((tag) => (
+                            <span className="tag" key={tag}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="recipe-meta">
                         <span>
                           {r.prep_minutes != null || r.cook_minutes != null
                             ? `${(r.prep_minutes || 0) + (r.cook_minutes || 0)} min`
                             : "Time not set"}
                         </span>
-                        <span>{r.servings} servings</span>
+                        {r.servings !== null ? (
+                          <span>{r.servings} servings</span>
+                        ) : null}
                       </div>
                     </div>
                   </Link>
@@ -213,7 +248,7 @@ export function Dashboard() {
           ) : (
             <div className="empty-state">
               <h3>
-                {q
+                {q || tag
                   ? "No recipes found"
                   : selected
                     ? "No recipes in this box"
@@ -223,7 +258,7 @@ export function Dashboard() {
                 <Link className="button primary" to="/recipes/new">
                   Create a recipe
                 </Link>
-                {!selected && !q ? (
+                {!selected && !q && !tag ? (
                   <button
                     onClick={() => setEditing({ name: "", description: "" })}
                   >

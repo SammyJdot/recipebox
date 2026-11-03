@@ -106,13 +106,58 @@ recorded in the recipe deletion transaction. Never log comment bodies.
 Repeated add/remove box
 operations are idempotent and audit only actual changes.
 
+## Tags, optional servings, and schema version 3
+
+Recipe create/update bodies accept `tags` as an optional array of strings (default
+`[]`). The form splits its optional comma-separated input into that array. Zod
+normalizes on the server: trim, lowercase, drop empty entries, deduplicate, then
+validate at most 10 tags and at most 30 characters per tag. HTML is rejected;
+React escapes displayed text. Tags are owned by the recipe author and use the
+existing author-only full-recipe PUT, `recipe.updated` audit event, actor, and
+recipe ID. Never add predefined tags or tag values to defaults or examples.
+
+`GET /api/recipes?q=&box_id=&tag=` supports general substring search over title,
+ingredient item, and normalized tags, plus an optional exact normalized tag
+filter. Omit `tag` when unused; an explicitly empty tag filter is invalid.
+Tag links use the exact filter so recipes with matching title text alone are
+excluded. Filters compose with boxes. Tags return as ordered arrays on recipe
+details and lists; list cards display up to three tags.
+
+Servings are nullable and default to null when omitted; provided values must be
+integers from 1 to 10,000. The editor starts blank. A null base hides scaling and
+bypasses quantity formatting to preserve ingredient text exactly. Integer scaler
+targets are independent of fraction-based ingredient quantities. Target state is
+an empty editing value or an integer string, and scaling uses target/base only.
+Legacy fractional bases remain stored unchanged; their initial/reset scaler
+target rounds up to the next whole number.
+
+The pre-fix Firefox native spinner reproduced `4 → 4.01 → 5.01 → 6.01` in the
+v0.2.0 app and in a bare HTML input with `min="0.01"` and `step="any"`. Changing
+only the step retained the offset; changing the minimum to 1 removed it. This
+isolates native step alignment as the cause, rather than parsing or scaling.
+The fix uses `min="1"`, `step="1"`, and integer target validation. Keep ingredient
+fraction parsing unchanged. The Firefox regression clicks native spinner arrows;
+Chromium desktop/mobile tests exercise arrow keys and exact ingredient ratios.
+
+Schema v3 creates `recipe_tags` with recipe foreign keys and ordered unique tags.
+To allow null servings, migration disables foreign-key enforcement only for a
+transactional rebuild of the recipes parent table, preserving IDs, timestamps,
+stored servings (including legacy fractions), and manual-cover references. It
+checks foreign keys before commit, restores enforcement, and keeps all child
+rows and audit triggers. Existing tags default to an empty array. Tests compare
+all original rows, including ingredients, steps, photos, boxes, links, comments,
+audits, users, and sessions, then reopen the database and check cascading deletes.
+Before an operator upgrades, back up all `/data` consistently with the service
+stopped. Earlier versions need their matching pre-upgrade snapshot for rollback;
+do not silently convert optional servings or discard post-upgrade data.
+
 ## Tests and checks
 
 ```sh
 npm run check
 npm test
 npm run build
-npx playwright install --with-deps chromium
+npx playwright install --with-deps chromium firefox
 npm run test:browser
 docker build --build-arg APP_VERSION=ci -t recipebox:ci .
 node scripts/container-smoke.js

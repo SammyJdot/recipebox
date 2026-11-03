@@ -1,11 +1,29 @@
 import { z } from "zod";
 const text = (max) => z.string().trim().max(max);
 const minutes = z.number().int().min(0).max(100000).nullable().default(null);
+export const tagsSchema = z
+  .array(z.string())
+  .default([])
+  .transform((values) => [
+    ...new Set(
+      values.map((value) => value.trim().toLowerCase()).filter(Boolean),
+    ),
+  ])
+  .pipe(
+    z
+      .array(
+        text(30)
+          .min(1)
+          .refine((value) => !/<[^>]*>/.test(value), "HTML is not allowed"),
+      )
+      .max(10),
+  );
 export const recipeSchema = z
   .object({
     title: text(200).min(1),
     description: text(10000).default(""),
-    servings: z.number().positive().max(10000),
+    servings: z.number().int().min(1).max(10000).nullable().default(null),
+    tags: tagsSchema,
     prep_minutes: minutes,
     cook_minutes: minutes,
     source: text(2000).default(""),

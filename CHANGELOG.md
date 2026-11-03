@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-03
+
+- Fix the Firefox servings-spinner offset caused by the old minimum of 0.01; whole-number arrows now follow 4 → 5 → 6 → 5 → 4 with exact target/base scaling.
+- Keep ingredient fraction handling unchanged and add native Firefox plus desktop/mobile scaler regressions.
+- Start new recipes with blank optional servings; preserve written quantities and hide scaling when no base is set.
+- Preserve existing servings and related data through schema version 3 migration.
+- Add optional comma-separated tags, normalized and validated on the server, with author-only editing audited as recipe updates.
+- Display tags on recipes and list cards; support tag search and exact click-to-filter alongside boxes.
+- Extend API, browser, migration, and container tests and document upgrade and rollback requirements.
+
 ## [0.2.0] — 2026-11-03
 
 - Add chronological plain-text recipe comments, with author editing and author or recipe-owner deletion enforced on the server.

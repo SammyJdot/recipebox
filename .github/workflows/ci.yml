@@ -19,7 +19,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox
       - name: Build clean runtime image
         run: docker build --pull --build-arg APP_VERSION=ci -t recipebox:ci .
       - name: Verify Compose startup, persistence and image contents

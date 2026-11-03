@@ -7,7 +7,8 @@ const emptyIngredient = () => ({ quantity: "", unit: "", item: "", note: "" });
 const emptyRecipe = () => ({
   title: "",
   description: "",
-  servings: 4,
+  servings: "",
+  tags: "",
   prep_minutes: "",
   cook_minutes: "",
   source: "",
@@ -37,6 +38,8 @@ export function RecipeEditor() {
         }
         setRecipe({
           ...r,
+          servings: r.servings ?? "",
+          tags: r.tags.join(", "),
           prep_minutes: r.prep_minutes ?? "",
           cook_minutes: r.cook_minutes ?? "",
           ingredients: r.ingredients.map((i) => ({
@@ -76,7 +79,8 @@ export function RecipeEditor() {
     const body = {
       title: recipe.title,
       description: recipe.description,
-      servings: Number(recipe.servings),
+      servings: recipe.servings === "" ? null : Number(recipe.servings),
+      tags: recipe.tags.split(","),
       prep_minutes:
         recipe.prep_minutes === "" ? null : Number(recipe.prep_minutes),
       cook_minutes:
@@ -143,15 +147,22 @@ export function RecipeEditor() {
                 placeholder="Description"
               />
             </label>
+            <label>
+              Tags (optional, comma-separated)
+              <input
+                value={recipe.tags}
+                onChange={(e) => field("tags", e.target.value)}
+              />
+            </label>
+            <p className="hint">Up to 10 tags, 30 characters each.</p>
             <div className="three-columns">
               <label>
                 Servings
                 <input
                   type="number"
-                  required
-                  min="0.01"
+                  min="1"
                   max="10000"
-                  step="any"
+                  step="1"
                   value={recipe.servings}
                   onChange={(e) => field("servings", e.target.value)}
                 />
@@ -382,7 +393,13 @@ export function RecipeView() {
       .then(([r, b]) => {
         setRecipe(r);
         setBoxes(b);
-        setServings((current) => current || String(r.servings));
+        setServings(
+          (current) =>
+            current ||
+            (r.servings === null
+              ? ""
+              : String(Math.max(1, Math.ceil(r.servings)))),
+        );
       })
       .catch((e) => {
         if (e.name !== "AbortError") setError(e.message);
@@ -443,8 +460,13 @@ export function RecipeView() {
   if (!recipe) return error ? <ErrorMessage error={error} /> : <Loading />;
   const mine = recipe.author_id === user.id;
   const cover = recipe.photos.find((p) => p.is_cover);
-  const validServings = Number(servings) > 0 && Number(servings) <= 10000;
-  const factor = validServings ? Number(servings) / recipe.servings : 1;
+  const hasServings = recipe.servings !== null;
+  const validServings =
+    Number.isInteger(Number(servings)) &&
+    Number(servings) >= 1 &&
+    Number(servings) <= 10000;
+  const factor =
+    hasServings && validServings ? Number(servings) / recipe.servings : 1;
   return (
     <article className="recipe-detail">
       <div className="detail-toolbar no-print">
@@ -467,12 +489,27 @@ export function RecipeView() {
           {recipe.description ? (
             <p className="recipe-description">{recipe.description}</p>
           ) : null}
+          {recipe.tags.length ? (
+            <nav className="tags" aria-label="Recipe tags">
+              {recipe.tags.map((tag) => (
+                <Link
+                  className="tag"
+                  key={tag}
+                  to={`/?${new URLSearchParams({ tag })}`}
+                >
+                  {tag}
+                </Link>
+              ))}
+            </nav>
+          ) : null}
           <p className="author">Added by {recipe.author_name}</p>
           <dl className="timing">
-            <div>
-              <dt>Serves</dt>
-              <dd>{validServings ? servings : recipe.servings}</dd>
-            </div>
+            {hasServings ? (
+              <div>
+                <dt>Serves</dt>
+                <dd>{validServings ? servings : recipe.servings}</dd>
+              </div>
+            ) : null}
             {recipe.prep_minutes !== null ? (
               <div>
                 <dt>Prep</dt>
@@ -496,28 +533,41 @@ export function RecipeView() {
           <div className="section-heading">
             <h2>Ingredients</h2>
           </div>
-          <div className="scaling no-print">
-            <label htmlFor="servings">Servings</label>
-            <input
-              id="servings"
-              type="number"
-              min="0.01"
-              max="10000"
-              step="any"
-              value={servings}
-              aria-invalid={!validServings}
-              onChange={(e) => setServings(e.target.value)}
-            />
-            <button
-              className="quiet"
-              onClick={() => setServings(String(recipe.servings))}
-            >
-              Reset
-            </button>
-          </div>
-          {!validServings ? (
+          {hasServings ? (
+            <div className="scaling no-print">
+              <label htmlFor="servings">Servings</label>
+              <input
+                id="servings"
+                type="number"
+                min="1"
+                max="10000"
+                step="1"
+                value={servings}
+                aria-invalid={!validServings}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === "") setServings("");
+                  else if (
+                    Number.isInteger(Number(value)) &&
+                    Number(value) >= 1 &&
+                    Number(value) <= 10000
+                  )
+                    setServings(String(Number(value)));
+                }}
+              />
+              <button
+                className="quiet"
+                onClick={() =>
+                  setServings(String(Math.max(1, Math.ceil(recipe.servings))))
+                }
+              >
+                Reset
+              </button>
+            </div>
+          ) : null}
+          {hasServings && !validServings ? (
             <p className="hint no-print">
-              Enter servings above zero, up to 10,000.
+              Enter whole-number servings from 1 to 10,000.
             </p>
           ) : null}
           {factor !== 1 ? (
@@ -529,7 +579,10 @@ export function RecipeView() {
             {recipe.ingredients.map((ingredient, index) => (
               <li key={index}>
                 <span className="ingredient-quantity">
-                  {scaleQuantity(ingredient.quantity, factor)} {ingredient.unit}
+                  {hasServings
+                    ? scaleQuantity(ingredient.quantity, factor)
+                    : ingredient.quantity || ""}{" "}
+                  {ingredient.unit}
                 </span>
                 <span>
                   {ingredient.item}
